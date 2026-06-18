@@ -1,0 +1,60 @@
+version: '3.8'
+
+networks:
+  red-cicd:
+    driver: bridge
+
+volumes:
+  datos-jenkins:
+  datos-sonar:
+  datos-sonar-extensions:
+  datos-postgres:
+
+services:
+  # 1. Base de datos requerida por SonarQube
+  db_postgres:
+    image: postgres:15-alpine
+    container_name: db_postgres
+    networks:
+      - red-cicd
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar_password
+      POSTGRES_DB: sonar
+    volumes:
+      - datos-postgres:/var/lib/postgresql/data
+
+  # 2. Servidor de SonarQube
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    depends_on:
+      - db_postgres
+    networks:
+      - red-cicd
+    ports:
+      - "9000:9000"
+    environment:
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar_password
+      SONAR_JDBC_URL: jdbc:postgresql://db_postgres:5432/sonar
+    volumes:
+      - datos-sonar:/opt/sonarqube/data
+      - datos-sonar-extensions:/opt/sonarqube/extensions
+
+  # 3. Servidor de Jenkins con acceso al Docker de tu computadora (Host)
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: jenkins
+    user: root
+    privileged: true
+    networks:
+      - red-cicd
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - datos-jenkins:/var/jenkins_home
+      # Esto permite a Jenkins ejecutar comandos docker build / run en tu PC
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /usr/bin/docker:/usr/bin/docker
